@@ -1,0 +1,10 @@
+<launch>
+	<node name="vins_fusion" pkg="vins"  type="vins_node" output="screen" args="$(find vins)/../config/vins.yaml"/>
+	<node name="rviz_vins" pkg="rviz"  type="rviz" output="screen" args="-d $(find vins)/../config/vins_rviz_config.rviz"/>
+	<include file="$(find vins_to_mavros)/launch/vins_to_mavros.launch"/>
+	
+	
+	<!-- 回环：订阅 /vins_fusion/* 与原始左目图像流，发布回环修正后的 /loop_fusion/odometry_rect -->
+	<node name="loop_fusion" pkg="loop_fusion"  type="loop_fusion_node" args="$(find vins)/../config/vins.yaml" output="screen"/>
+
+</launch> 

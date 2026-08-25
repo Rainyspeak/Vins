@@ -1,0 +1,18 @@
+# catkin 编译产物
+build/
+devel/
+logs/
+.catkin_tools/
+
+# realsense-ros 通过 apt/上游仓库安装，不入库
+src/realsense-ros/
+
+# Python
+*.pyc
+__pycache__/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+*.swp
+.DS_Store

@@ -1,0 +1,11 @@
+<launch>
+
+  <!-- 默认使用回环修正后的里程计（/loop_fusion/odometry_rect）。
+       若想退回未修正的 VIO 输出，把 vins_odom_topic 改为 /vins_fusion/odometry -->
+  <arg name="vins_odom_topic" default="/loop_fusion/odometry_rect" />
+
+  <node name="vins_to_mavros" pkg="vins_to_mavros" type="vins_to_mavros" output="screen">
+    <param name="vins_odom_topic" value="$(arg vins_odom_topic)" />
+  </node>
+
+</launch>
