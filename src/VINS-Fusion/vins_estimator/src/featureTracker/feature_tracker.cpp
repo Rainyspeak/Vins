@@ -99,14 +99,13 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
     row = cur_img.rows;
     col = cur_img.cols;
     cv::Mat rightImg = _img1;
-    /*
+    // 红外图对比度增强: 投射器已物理遮挡, 低对比图上 goodFeaturesToTrack 角点质量差
     {
         cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
         clahe->apply(cur_img, cur_img);
         if(!rightImg.empty())
             clahe->apply(rightImg, rightImg);
     }
-    */
     cur_pts.clear();
 
     if (prev_pts.size() > 0)
@@ -166,7 +165,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
 
     if (1)
     {
-        //rejectWithF();
+        rejectWithF();
         ROS_DEBUG("set mask begins");
         TicToc t_m;
         setMask();
@@ -331,7 +330,8 @@ void FeatureTracker::rejectWithF()
         int size_a = cur_pts.size();
         reduceVector(prev_pts, status);
         reduceVector(cur_pts, status);
-        reduceVector(cur_un_pts, status);
+        // 注意: 不能 reduce cur_un_pts——它还是上一帧的旧尺寸, 与 status 长度不一致会越界,
+        // 且 trackImage 后面会对削减后的 cur_pts 整体重算 cur_un_pts
         reduceVector(ids, status);
         reduceVector(track_cnt, status);
         ROS_DEBUG("FM ransac: %d -> %lu: %f", size_a, cur_pts.size(), 1.0 * cur_pts.size() / size_a);
