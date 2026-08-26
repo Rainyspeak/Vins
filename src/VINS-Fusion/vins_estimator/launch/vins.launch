@@ -1,7 +1,11 @@
 <launch>
 	<node name="vins_fusion" pkg="vins"  type="vins_node" output="screen" args="$(find vins)/../config/vins.yaml"/>
 	<node name="rviz_vins" pkg="rviz"  type="rviz" output="screen" args="-d $(find vins)/../config/vins_rviz_config.rviz"/>
-	<include file="$(find vins_to_mavros)/launch/vins_to_mavros.launch"/>
+	<!-- 视觉里程计来源切换: 默认回环修正后的 odometry_rect; 起飞对比实验可传 /vins_fusion/odometry -->
+	<arg name="vins_odom_topic" default="/loop_fusion/odometry_rect" />
+	<include file="$(find vins_to_mavros)/launch/vins_to_mavros.launch">
+		<arg name="vins_odom_topic" value="$(arg vins_odom_topic)" />
+	</include>
 	
 	
 	<!-- 回环：订阅 /vins_fusion/* 与原始左目图像流，发布回环修正后的 /loop_fusion/odometry_rect -->
