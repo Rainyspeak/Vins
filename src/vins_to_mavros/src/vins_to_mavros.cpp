@@ -72,6 +72,9 @@ void vins_bridge::vins_odom_cb(const nav_msgs::Odometry::ConstPtr &msg)
     estimatedAttitude.yaw = yaw * 180 / pi;
 
     estimatedOdomRec_flag = true;
+
+    // 到达即转发: 30Hz定时器重发陈旧值会额外引入~80ms延迟(实测)
+    vision_pose_pub.publish(estimatedPose);
 }
 
 void vins_bridge::px4Pose_cb(const geometry_msgs::PoseStamped::ConstPtr &msg)
@@ -88,42 +91,46 @@ void vins_bridge::px4Pose_cb(const geometry_msgs::PoseStamped::ConstPtr &msg)
 
 void vins_bridge::start()
 {
+    ros::Time last_print = ros::Time::now();
     while (ros::ok())
     {
-        if (estimatedOdomRec_flag == false)
-        {
-            cout << "\033[K"
-                 << "\033[31m vinsPose no receive!!!  Waiting for pose\033[0m" << endl;
-        }
-        else
-        {
-            vision_pose_pub.publish(estimatedPose);
-
-            cout << "\033[K"
-                 << "\033[32m vins estimate ok !\033[0m" << endl;
-            cout << "\033[K"
-                 << "       VINS-Pose               Px4-Pose" << endl;
-            cout << setiosflags(ios::fixed) << setprecision(7)
-                 << "\033[K"
-                 << "x      " << estimatedPose.pose.position.x << "\t\t" << px4Pose.pose.position.x << endl;
-            cout << setiosflags(ios::fixed) << setprecision(7)
-                 << "\033[K"
-                 << "y      " << estimatedPose.pose.position.y << "\t\t" << px4Pose.pose.position.y << endl;
-            cout << setiosflags(ios::fixed) << setprecision(7)
-                 << "\033[K"
-                 << "z      " << estimatedPose.pose.position.z << "\t\t" << px4Pose.pose.position.z << endl;
-            cout << setiosflags(ios::fixed) << setprecision(7)
-                 << "\033[K"
-                 << "pitch  " << estimatedAttitude.pitch << "\t\t" << px4Attitude.pitch << endl;
-            cout << setiosflags(ios::fixed) << setprecision(7)
-                 << "\033[K"
-                 << "roll   " << estimatedAttitude.roll << "\t\t" << px4Attitude.roll << endl;
-            cout << setiosflags(ios::fixed) << setprecision(7)
-                 << "\033[K"
-                 << "yaw    " << estimatedAttitude.yaw << "\t\t" << px4Attitude.yaw << endl;
-            cout << "\033[9A" << endl;
-        }
+        // 转发已在 vins_odom_cb 中完成, 这里只驱动回调并低频打印状态
         ros::spinOnce();
+        if (ros::Time::now() - last_print >= ros::Duration(1.0))
+        {
+            last_print = ros::Time::now();
+            if (estimatedOdomRec_flag == false)
+            {
+                cout << "\033[K"
+                     << "\033[31m vinsPose no receive!!!  Waiting for pose\033[0m" << endl;
+            }
+            else
+            {
+                cout << "\033[K"
+                     << "\033[32m vins estimate ok !\033[0m" << endl;
+                cout << "\033[K"
+                     << "       VINS-Pose               Px4-Pose" << endl;
+                cout << setiosflags(ios::fixed) << setprecision(7)
+                     << "\033[K"
+                     << "x      " << estimatedPose.pose.position.x << "\t\t" << px4Pose.pose.position.x << endl;
+                cout << setiosflags(ios::fixed) << setprecision(7)
+                     << "\033[K"
+                     << "y      " << estimatedPose.pose.position.y << "\t\t" << px4Pose.pose.position.y << endl;
+                cout << setiosflags(ios::fixed) << setprecision(7)
+                     << "\033[K"
+                     << "z      " << estimatedPose.pose.position.z << "\t\t" << px4Pose.pose.position.z << endl;
+                cout << setiosflags(ios::fixed) << setprecision(7)
+                     << "\033[K"
+                     << "pitch  " << estimatedAttitude.pitch << "\t\t" << px4Attitude.pitch << endl;
+                cout << setiosflags(ios::fixed) << setprecision(7)
+                     << "\033[K"
+                     << "roll   " << estimatedAttitude.roll << "\t\t" << px4Attitude.roll << endl;
+                cout << setiosflags(ios::fixed) << setprecision(7)
+                     << "\033[K"
+                     << "yaw    " << estimatedAttitude.yaw << "\t\t" << px4Attitude.yaw << endl;
+                cout << "\033[9A" << endl;
+            }
+        }
         rate->sleep();
     }
     cout << "\033[9B" << endl;
