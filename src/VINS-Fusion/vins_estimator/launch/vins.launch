@@ -1,17 +1,9 @@
 <launch>
 	<node name="vins_fusion" pkg="vins"  type="vins_node" output="screen" args="$(find vins)/../config/vins.yaml"/>
-	<node name="rviz_vins" pkg="rviz"  type="rviz" output="screen" args="-d $(find vins)/../config/vins_rviz_config.rviz"/>
-	<!-- 视觉里程计来源切换: 默认回环修正后的 odometry_rect; 起飞对比实验可传 /vins_fusion/odometry -->
-	<arg name="vins_odom_topic" default="/loop_fusion/odometry_rect" />
-	<include file="$(find vins_to_mavros)/launch/vins_to_mavros.launch">
-		<arg name="vins_odom_topic" value="$(arg vins_odom_topic)" />
-	</include>
+	<node name="rviz_vins" pkg="rviz"  type="rviz"  output="screen" args="-d $(find vins)/../config/vins_rviz_config.rviz"/>
+	<include file="$(find vins_to_mavros)/launch/vins_to_mavros.launch"/>
 	
-	
-	<!-- 回环：订阅 /vins_fusion/* 与原始左目图像流，发布回环修正后的 /loop_fusion/odometry_rect -->
-	<node name="loop_fusion" pkg="loop_fusion"  type="loop_fusion_node" args="$(find vins)/../config/vins.yaml" output="screen"/>
 
-	<!-- mavros(map系) 数据在 rviz 固定坐标系 world 下显示所需的全等变换, 仅影响可视化 -->
-	<node pkg="tf" type="static_transform_publisher" name="map_to_world_tf" args="0 0 0 0 0 0 world map 50"/>
+	<!-- <node name="loop_fusion" pkg="loop_fusion"  type="loop_fusion_node" args="$(find vins)/../config/fast_drone_250.yaml" output="screen"/> -->
 
 </launch> 

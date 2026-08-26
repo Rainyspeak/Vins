@@ -76,17 +76,13 @@ ros::Publisher pub_point_cloud, pub_margin_cloud;
 void new_sequence()
 {
     printf("new sequence\n");
-    // pose_graph.h 中 path[10]/pub_path[10] 为定长数组，sequence 最多到 9；
-    // 超过后不再 ROS_BREAK（飞行中图像短暂中断会走到这里，节点挂掉会断掉 odometry_rect 供数）
-    if (sequence < 9)
-    {
-        sequence++;
-    }
-    else
-    {
-        ROS_WARN("exceed max sequence count, keep using sequence %d", sequence);
-    }
+    sequence++;
     printf("sequence cnt %d \n", sequence);
+    if (sequence > 5)
+    {
+        ROS_WARN("only support 5 sequences since it's boring to copy code for more sequences.");
+        ROS_BREAK();
+    }
     posegraph.posegraph_visualization->reset();
     posegraph.publish();
     m_buf.lock();
@@ -482,13 +478,12 @@ int main(int argc, char **argv)
         load_flag = 1;
     }
 
-    // vins.launch 中主节点名为 vins_fusion，话题都在 /vins_fusion 命名空间下
-    ros::Subscriber sub_vio = n.subscribe("/vins_fusion/odometry", 2000, vio_callback);
+    ros::Subscriber sub_vio = n.subscribe("/vins_estimator/odometry", 2000, vio_callback);
     ros::Subscriber sub_image = n.subscribe(IMAGE_TOPIC, 2000, image_callback);
-    ros::Subscriber sub_pose = n.subscribe("/vins_fusion/keyframe_pose", 2000, pose_callback);
-    ros::Subscriber sub_extrinsic = n.subscribe("/vins_fusion/extrinsic", 2000, extrinsic_callback);
-    ros::Subscriber sub_point = n.subscribe("/vins_fusion/keyframe_point", 2000, point_callback);
-    ros::Subscriber sub_margin_point = n.subscribe("/vins_fusion/margin_cloud", 2000, margin_point_callback);
+    ros::Subscriber sub_pose = n.subscribe("/vins_estimator/keyframe_pose", 2000, pose_callback);
+    ros::Subscriber sub_extrinsic = n.subscribe("/vins_estimator/extrinsic", 2000, extrinsic_callback);
+    ros::Subscriber sub_point = n.subscribe("/vins_estimator/keyframe_point", 2000, point_callback);
+    ros::Subscriber sub_margin_point = n.subscribe("/vins_estimator/margin_cloud", 2000, margin_point_callback);
 
     pub_match_img = n.advertise<sensor_msgs::Image>("match_image", 1000);
     pub_camera_pose_visual = n.advertise<visualization_msgs::MarkerArray>("camera_pose_visual", 1000);

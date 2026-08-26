@@ -293,9 +293,7 @@ void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header)
 {
     sensor_msgs::PointCloud point_cloud, loop_point_cloud;
     point_cloud.header = header;
-    point_cloud.header.frame_id = "world";
     loop_point_cloud.header = header;
-    loop_point_cloud.header.frame_id = "world";
 
 
     for (auto &it_per_id : estimator.f_manager.feature)
@@ -322,7 +320,6 @@ void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header)
     // pub margined potin
     sensor_msgs::PointCloud margin_cloud;
     margin_cloud.header = header;
-    margin_cloud.header.frame_id = "world";
 
     for (auto &it_per_id : estimator.f_manager.feature)
     { 
