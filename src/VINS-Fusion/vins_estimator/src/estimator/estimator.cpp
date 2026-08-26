@@ -175,14 +175,13 @@ void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
         pubTrackImage(imgTrack, t);
     }
     
-    if(MULTIPLE_THREAD)  
-    {     
-        if(inputImageCnt % 2 == 0)
-        {
-            mBuf.lock();
-            featureBuf.push(make_pair(t, featureFrame));
-            mBuf.unlock();
-        }
+    if(MULTIPLE_THREAD)
+    {
+        // 上游原版 inputImageCnt % 2 每2帧只送1帧进求解器(按30fps相机设计的降载);
+        // 本机相机为15fps, 保留会腰斩到7.5Hz, 改为逐帧送入
+        mBuf.lock();
+        featureBuf.push(make_pair(t, featureFrame));
+        mBuf.unlock();
     }
     else
     {
