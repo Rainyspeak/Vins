@@ -61,6 +61,7 @@ void vins_bridge::vins_odom_cb(const nav_msgs::Odometry::ConstPtr &msg)
     // 纯转发：只取位姿与时间戳，不做任何修正
     estimatedPose.pose = msg->pose.pose;
     estimatedPose.header.stamp = msg->header.stamp;
+    estimatedPose.header.frame_id = "world";
 
     // 四元数转 RPY（仅用于调试显示）
     tf2::Quaternion quat;
