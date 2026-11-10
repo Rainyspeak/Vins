@@ -1318,8 +1318,26 @@ void Estimator::optimization()
                 delete last_marginalization_info;
             last_marginalization_info = marginalization_info;
             last_marginalization_parameter_blocks = parameter_blocks;
-            
+
         }
+    }
+
+    // 视觉质量指标: 统计滑窗最新帧的特征数与双目约束占比(见 estimator.h visual_quality 注释)
+    {
+        int n_cur = 0, n_cur_stereo = 0;
+        for (auto &it_per_id : f_manager.feature)
+        {
+            if (it_per_id.endFrame() != frame_count)
+                continue;
+            n_cur++;
+            if (it_per_id.feature_per_frame.back().is_stereo)
+                n_cur_stereo++;
+        }
+        double q_feat = std::min(1.0, n_cur / 40.0);
+        double q_stereo = n_cur > 0 ? (double)n_cur_stereo / n_cur : 0.0;
+        double q = 0.6 * q_feat + 0.4 * q_stereo;
+        visual_quality = (solver_flag == Estimator::SolverFlag::NON_LINEAR) ? q : 0.0;
+        ROS_DEBUG("visual_quality: %d feat %d stereo q=%.2f", n_cur, n_cur_stereo, visual_quality);
     }
     //printf("whole marginalization costs: %f \n", t_whole_marginalization.toc());
     //printf("whole time for ceres: %f \n", t_whole.toc());

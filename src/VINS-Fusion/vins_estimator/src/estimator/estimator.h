@@ -107,6 +107,9 @@ class Estimator
     FeatureTracker featureTracker;
 
     SolverFlag solver_flag;
+    // 视觉质量指标(0~1): 最新帧特征数量(权重0.6) + 双目约束占比(权重0.4),
+    // 由 visualization 映射为位姿协方差, 供下游 EKF2 在跟踪退化(模糊/弱纹理)时置信降权
+    double visual_quality = 0.0;
     MarginalizationFlag  marginalization_flag;
     Vector3d g;
 

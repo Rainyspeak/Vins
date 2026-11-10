@@ -167,6 +167,30 @@ void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
         odometry.twist.twist.linear.x = estimator.Vs[WINDOW_SIZE].x();
         odometry.twist.twist.linear.y = estimator.Vs[WINDOW_SIZE].y();
         odometry.twist.twist.linear.z = estimator.Vs[WINDOW_SIZE].z();
+
+        // 自适应位姿置信度: 视觉质量指标映射为协方差, 下游 EKF2 可据此降权;
+        // 质量 1.0 -> 位置 σ=0.05m/角度 σ=2°, 质量 0.05 -> σ 放大 20 倍(上限 2m/20°);
+        // 旧 PX4 固件忽略协方差, 行为与原版一致
+        double q = std::min(1.0, std::max(0.05, estimator.visual_quality));
+        const double deg2rad = 0.017453292519943295;
+        double pos_sigma = std::min(0.05 / q, 2.0);
+        double ang_sigma = std::min(2.0 / q, 20.0) * deg2rad;
+        odometry.pose.covariance[0]  = pos_sigma * pos_sigma;
+        odometry.pose.covariance[7]  = pos_sigma * pos_sigma;
+        odometry.pose.covariance[14] = pos_sigma * pos_sigma;
+        odometry.pose.covariance[21] = ang_sigma * ang_sigma;
+        odometry.pose.covariance[28] = ang_sigma * ang_sigma;
+        odometry.pose.covariance[35] = ang_sigma * ang_sigma;
+
+        // 质量日志(诊断用): 时间戳 质量值 位置σ(m)
+        {
+            static ofstream fquality(OUTPUT_FOLDER + "/visual_quality_log.txt", ios::app);
+            fquality.setf(ios::fixed, ios::floatfield);
+            fquality.precision(6);
+            fquality << header.stamp.toSec() << " " << estimator.visual_quality << " "
+                     << pos_sigma << endl;
+        }
+
         pub_odometry.publish(odometry);
 
         geometry_msgs::PoseStamped pose_stamped;

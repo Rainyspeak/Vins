@@ -1,5 +1,6 @@
 #include <ros/ros.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <nav_msgs/Odometry.h>
 #include <iostream>
 #include <tf/transform_datatypes.h>
@@ -21,6 +22,7 @@ public:
 
     geometry_msgs::PoseStamped px4Pose;
     geometry_msgs::PoseStamped estimatedPose;
+    geometry_msgs::PoseWithCovarianceStamped estimatedPoseCov;
 
     bool estimatedOdomRec_flag;
 
@@ -30,6 +32,7 @@ public:
 
     ros::Subscriber px4Pose_sub;
     ros::Publisher vision_pose_pub;
+    ros::Publisher vision_pose_cov_pub;
     ros::Subscriber odom_sub;
 
     void px4Pose_cb(const geometry_msgs::PoseStamped::ConstPtr &msg);
@@ -50,6 +53,8 @@ vins_bridge::vins_bridge(const ros::NodeHandle &nh_, const ros::NodeHandle &nh_p
     px4Pose_sub = nh.subscribe<geometry_msgs::PoseStamped>("mavros/local_position/pose", 10, &vins_bridge::px4Pose_cb, this);
     odom_sub = nh.subscribe<nav_msgs::Odometry>(vins_odom_topic, 2, &vins_bridge::vins_odom_cb, this);
     vision_pose_pub = nh.advertise<geometry_msgs::PoseStamped>("mavros/vision_pose/pose", 10);
+    // 协方差版话题: PX4 EKF2(EV_NOISE_MD=1)可据 VINS 自适应协方差降权; 旧固件忽略该话题, 行为不变
+    vision_pose_cov_pub = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("mavros/vision_pose/pose_cov", 10);
 
     estimatedOdomRec_flag = false;
     estimatedAttitude.pitch = estimatedAttitude.roll = estimatedAttitude.yaw = 0;
@@ -75,6 +80,10 @@ void vins_bridge::vins_odom_cb(const nav_msgs::Odometry::ConstPtr &msg)
 
     // 到达即转发: 30Hz定时器重发陈旧值会额外引入~80ms延迟(实测)
     vision_pose_pub.publish(estimatedPose);
+    // 同步转发带协方差的位姿(协方差由 VINS 按视觉质量自适应生成)
+    estimatedPoseCov.header.stamp = msg->header.stamp;
+    estimatedPoseCov.pose = msg->pose;
+    vision_pose_cov_pub.publish(estimatedPoseCov);
 }
 
 void vins_bridge::px4Pose_cb(const geometry_msgs::PoseStamped::ConstPtr &msg)
