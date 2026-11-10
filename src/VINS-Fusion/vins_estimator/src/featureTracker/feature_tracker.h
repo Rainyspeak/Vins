@@ -39,6 +39,7 @@ public:
     FeatureTracker();
     map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> trackImage(double _cur_time, const cv::Mat &_img, const cv::Mat &_img1 = cv::Mat());
     void setMask();
+    void detectFeaturesGrid();
     void readIntrinsicParameter(const vector<string> &calib_file);
     void showUndistortion(const string &name);
     void rejectWithF();
@@ -81,4 +82,10 @@ public:
     bool stereo_cam;
     int n_id;
     bool hasPrediction;
+
+    cv::Ptr<cv::CLAHE> m_clahe; // CLAHE 光照均衡(use_clahe 开启时惰性创建)
+
+    // 双目视差中位数:上一帧成功匹配的统计量,给下一帧双目 LK 提供初值(仅校正双目对有效)
+    double stereo_disp_median = 0.0;
+    bool stereo_disp_valid = false;
 };

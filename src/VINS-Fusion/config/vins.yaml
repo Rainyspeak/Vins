@@ -49,13 +49,16 @@ body_T_cam1: !!opencv-matrix
 #Multiple thread support
 multiple_thread: 1
 
-#feature traker paprameters
+#feature tracker parameters
 max_cnt: 150            # max feature number in feature tracking
-min_dist: 30            # min distance between two features 
-freq: 30                # frequence (Hz) of publish tracking result. At least 10Hz for good estimation. If set 0, the frequence will be same as raw image 
-F_threshold: 1.0        # ransac threshold (pixel)
+min_dist: 30            # min distance between two features
+grid_rows: 4            # 网格化均匀提点:图像划为 grid_rows x grid_cols 网格按格配额补点(提升退化场景泛化性);设 0 回退整图检测
+grid_cols: 5
+use_fundamental_ransac: 1 # 时序光流后用基础矩阵 RANSAC 剔除外点(原版上游行为,曾被关闭);注:原 freq 参数为 VINS-Mono 遗留死参数(代码从不读取),已移除
+F_threshold: 1.0        # ransac threshold (pixel), used when use_fundamental_ransac: 1
 show_track: 1           # publish tracking image as topic
 flow_back: 1            # perform forward and backward optical flow to improve feature tracking accuracy
+use_clahe: 0            # CLAHE 光照均衡(弱纹理/明暗突变场景可试 1;机载 CPU 有额外开销)
 
 #optimization parameters
 max_solver_time: 0.04  # max solver itration time (ms), to guarantee real time

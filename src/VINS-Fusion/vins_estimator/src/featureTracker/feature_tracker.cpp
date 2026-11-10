@@ -83,6 +83,72 @@ void FeatureTracker::setMask()
     }
 }
 
+// 网格化均匀提点:图像划为 GRID_ROWS x GRID_COLS 网格,按格配额补新特征,
+// 避免整图 goodFeaturesToTrack 把点挤进高纹理局部区域(退化场景下姿态观测分布更均匀)
+void FeatureTracker::detectFeaturesGrid()
+{
+    n_pts.clear();
+    int n_need = MAX_CNT - static_cast<int>(cur_pts.size());
+    if (n_need <= 0)
+        return;
+
+    const int total_cells = GRID_ROWS * GRID_COLS;
+    const int per_cell = (MAX_CNT + total_cells - 1) / total_cells;
+    const int cell_w = col / GRID_COLS;
+    const int cell_h = row / GRID_ROWS;
+
+    // 先统计每格缺口,按缺口降序填格:角点总量受限时优先补最空的格子,
+    // 避免固定行列顺序造成的左上偏置
+    vector<pair<int, cv::Rect>> cells; // (配额缺口, 格子)
+    cells.reserve(total_cells);
+    for (int r = 0; r < GRID_ROWS; r++)
+    {
+        for (int c = 0; c < GRID_COLS; c++)
+        {
+            int x0 = c * cell_w;
+            int y0 = r * cell_h;
+            int cw = (c == GRID_COLS - 1) ? col - x0 : cell_w;
+            int ch = (r == GRID_ROWS - 1) ? row - y0 : cell_h;
+            if (cw <= 0 || ch <= 0)
+                continue;
+
+            cv::Rect roi(x0, y0, cw, ch);
+
+            int existed = 0;
+            for (const auto &p : cur_pts)
+                if (p.x >= x0 && p.x < x0 + cw && p.y >= y0 && p.y < y0 + ch)
+                    existed++;
+
+            int need = per_cell - existed;
+            if (need > 0)
+                cells.push_back(make_pair(need, roi));
+        }
+    }
+    sort(cells.begin(), cells.end(),
+         [](const pair<int, cv::Rect> &a, const pair<int, cv::Rect> &b) { return a.first > b.first; });
+
+    for (const auto &cell : cells)
+    {
+        if (n_need <= 0)
+            break;
+        const cv::Rect &roi = cell.second;
+
+        int request = cell.first + 2; // 每格留少量冗余候选,总量仍受 MAX_CNT 约束
+        if (request > n_need)
+            request = n_need;
+
+        vector<cv::Point2f> cell_pts;
+        cv::goodFeaturesToTrack(cur_img(roi), cell_pts, request, 0.01, MIN_DIST, mask(roi));
+        for (const auto &p : cell_pts)
+        {
+            if (n_need <= 0)
+                break;
+            n_pts.push_back(cv::Point2f(p.x + roi.x, p.y + roi.y));
+            n_need--;
+        }
+    }
+}
+
 double FeatureTracker::distance(cv::Point2f &pt1, cv::Point2f &pt2)
 {
     //printf("pt1: %f %f pt2: %f %f\n", pt1.x, pt1.y, pt2.x, pt2.y);
@@ -99,14 +165,15 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
     row = cur_img.rows;
     col = cur_img.cols;
     cv::Mat rightImg = _img1;
-    /*
+    // CLAHE 直方图均衡(弱纹理/明暗突变场景),use_clahe 开启才生效
+    if (USE_CLAHE)
     {
-        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
-        clahe->apply(cur_img, cur_img);
+        if (m_clahe.empty())
+            m_clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
+        m_clahe->apply(cur_img, cur_img);
         if(!rightImg.empty())
-            clahe->apply(rightImg, rightImg);
+            m_clahe->apply(rightImg, rightImg);
     }
-    */
     cur_pts.clear();
 
     if (prev_pts.size() > 0)
@@ -149,7 +216,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
                     status[i] = 0;
             }
         }
-        
+
         for (int i = 0; i < int(cur_pts.size()); i++)
             if (status[i] && !inBorder(cur_pts[i]))
                 status[i] = 0;
@@ -166,7 +233,8 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
 
     if (1)
     {
-        //rejectWithF();
+        if (USE_FM_RANSAC)
+            rejectWithF();
         ROS_DEBUG("set mask begins");
         TicToc t_m;
         setMask();
@@ -177,11 +245,18 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
         int n_max_cnt = MAX_CNT - static_cast<int>(cur_pts.size());
         if (n_max_cnt > 0)
         {
-            if(mask.empty())
-                cout << "mask is empty " << endl;
-            if (mask.type() != CV_8UC1)
-                cout << "mask type wrong " << endl;
-            cv::goodFeaturesToTrack(cur_img, n_pts, MAX_CNT - cur_pts.size(), 0.01, MIN_DIST, mask);
+            if (GRID_ROWS > 0 && GRID_COLS > 0)
+            {
+                detectFeaturesGrid();
+            }
+            else
+            {
+                if(mask.empty())
+                    cout << "mask is empty " << endl;
+                if (mask.type() != CV_8UC1)
+                    cout << "mask type wrong " << endl;
+                cv::goodFeaturesToTrack(cur_img, n_pts, MAX_CNT - cur_pts.size(), 0.01, MIN_DIST, mask);
+            }
         }
         else
             n_pts.clear();
@@ -212,18 +287,100 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
             vector<cv::Point2f> reverseLeftPts;
             vector<uchar> status, statusRightLeft;
             vector<float> err;
-            // cur left ---- cur right
-            cv::calcOpticalFlowPyrLK(cur_img, rightImg, cur_pts, cur_right_pts, status, err, cv::Size(21, 21), 3);
+            // cur left ---- cur right:校正对按上一帧视差中位数给初值,单层金字塔足够;
+            // 成功率过低时回退无初值三层金字塔,最坏情况不差于原实现
+            bool use_disp_init = stereo_disp_valid;
+            if (use_disp_init)
+            {
+                cur_right_pts.reserve(cur_pts.size());
+                for (const auto &p : cur_pts)
+                    cur_right_pts.push_back(cv::Point2f(p.x - stereo_disp_median, p.y));
+                cv::calcOpticalFlowPyrLK(cur_img, rightImg, cur_pts, cur_right_pts, status, err, cv::Size(21, 21), 1,
+                cv::TermCriteria(cv::TermCriteria::COUNT+cv::TermCriteria::EPS, 30, 0.01), cv::OPTFLOW_USE_INITIAL_FLOW);
+
+                int succ_num = 0;
+                for (size_t i = 0; i < status.size(); i++)
+                    if (status[i])
+                        succ_num++;
+                if (succ_num * 2 < (int)cur_pts.size())
+                {
+                    use_disp_init = false;
+                    cv::calcOpticalFlowPyrLK(cur_img, rightImg, cur_pts, cur_right_pts, status, err, cv::Size(21, 21), 3);
+                }
+            }
+            else
+                cv::calcOpticalFlowPyrLK(cur_img, rightImg, cur_pts, cur_right_pts, status, err, cv::Size(21, 21), 3);
             // reverse check cur right ---- cur left
             if(FLOW_BACK)
             {
                 cv::calcOpticalFlowPyrLK(rightImg, cur_img, cur_right_pts, reverseLeftPts, statusRightLeft, err, cv::Size(21, 21), 3);
                 for(size_t i = 0; i < status.size(); i++)
                 {
-                    if(status[i] && statusRightLeft[i] && inBorder(cur_right_pts[i]) && distance(cur_pts[i], reverseLeftPts[i]) <= 0.5)
+                    if(status[i] && statusRightLeft[i] && inBorder(cur_right_pts[i])
+                       && distance(cur_pts[i], reverseLeftPts[i]) <= 0.5)
                         status[i] = 1;
                     else
                         status[i] = 0;
+                }
+            }
+            else
+            {
+                for(size_t i = 0; i < status.size(); i++)
+                {
+                    if(status[i] && inBorder(cur_right_pts[i]))
+                        status[i] = 1;
+                    else
+                        status[i] = 0;
+                }
+            }
+
+            // 鲁棒极线一致性门限(几何无关,兼容校正对与畸变对):
+            // 行偏差 dy 的中位数与 MAD 构成自适应门限,超 med±max(2px, 3.5*MAD+0.5) 判为视差错误。
+            // 校正对 dy 中位数≈0 且 MAD 极小,门限自动收紧到 ~2px;
+            // 畸变对(如 EuRoC 原始图像)dy 随像素位置系统变化,门限自适应放宽。
+            // 内点不足 20 个时不启用,避免统计失真。视差错误的匹配会毒害三角化与初始化。
+            {
+                vector<double> dys;
+                dys.reserve(status.size());
+                for (size_t i = 0; i < status.size(); i++)
+                    if (status[i])
+                        dys.push_back(cur_right_pts[i].y - cur_pts[i].y);
+                if (dys.size() >= 20)
+                {
+                    std::nth_element(dys.begin(), dys.begin() + dys.size() / 2, dys.end());
+                    double med = dys[dys.size() / 2];
+                    vector<double> absdev(dys.size());
+                    for (size_t i = 0; i < dys.size(); i++)
+                        absdev[i] = fabs(dys[i] - med);
+                    std::nth_element(absdev.begin(), absdev.begin() + absdev.size() / 2, absdev.end());
+                    double mad = absdev[absdev.size() / 2];
+                    double tol = 3.5 * mad + 0.5;
+                    if (tol < 2.0)
+                        tol = 2.0;
+                    for (size_t i = 0; i < status.size(); i++)
+                        if (status[i] && fabs(cur_right_pts[i].y - cur_pts[i].y - med) > tol)
+                            status[i] = 0;
+                }
+            }
+
+            // 用最终内点更新视差中位数,供下一帧双目匹配做初值
+            {
+                vector<double> disps;
+                disps.reserve(status.size());
+                for (size_t i = 0; i < status.size(); i++)
+                {
+                    if (status[i])
+                    {
+                        double d = cur_pts[i].x - cur_right_pts[i].x;
+                        if (d > 0.0)
+                            disps.push_back(d);
+                    }
+                }
+                if (disps.size() >= 10)
+                {
+                    std::nth_element(disps.begin(), disps.begin() + disps.size() / 2, disps.end());
+                    stereo_disp_median = disps[disps.size() / 2];
+                    stereo_disp_valid = true;
                 }
             }
 

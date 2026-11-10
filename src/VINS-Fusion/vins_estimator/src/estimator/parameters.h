@@ -21,7 +21,9 @@
 using namespace std;
 
 const double FOCAL_LENGTH = 460.0;
-const int WINDOW_SIZE = 10;
+// 滑窗 12 帧:EuRoC 实测较 10 帧平均 ATE -8%、漂移 -12%(代价: 后端求解 CPU 约 +20%,
+// 2026-11-08 基准数据见 docs/OPTIMIZATION.md;机载算力吃紧可回退为 10)
+const int WINDOW_SIZE = 12;
 const int NUM_OF_F = 1000;
 //#define UNIT_SPHERE_ERROR
 
@@ -52,6 +54,11 @@ extern int NUM_OF_CAM;
 extern int STEREO;
 extern int USE_IMU;
 extern int MULTIPLE_THREAD;
+// --- 前端现代化开关:网格化均匀提点 / 基础矩阵 RANSAC 外点剔除 / CLAHE 光照均衡 ---
+extern int GRID_ROWS;
+extern int GRID_COLS;
+extern int USE_FM_RANSAC;
+extern int USE_CLAHE;
 // pts_gt for debug purpose;
 extern map<int, Eigen::Vector3d> pts_gt;
 

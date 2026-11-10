@@ -36,6 +36,10 @@ int NUM_OF_CAM;
 int STEREO;
 int USE_IMU;
 int MULTIPLE_THREAD;
+int GRID_ROWS;
+int GRID_COLS;
+int USE_FM_RANSAC;
+int USE_CLAHE;
 map<int, Eigen::Vector3d> pts_gt;
 std::string IMAGE0_TOPIC, IMAGE1_TOPIC;
 std::string FISHEYE_MASK;
@@ -86,6 +90,22 @@ void readParameters(std::string config_file)
     F_THRESHOLD = fsSettings["F_threshold"];
     SHOW_TRACK = fsSettings["show_track"];
     FLOW_BACK = fsSettings["flow_back"];
+
+    // --- 前端现代化开关;yaml 未写时 grid=4x5 / FM-RANSAC 开 / CLAHE 关 ---
+    GRID_ROWS = 4;
+    GRID_COLS = 5;
+    USE_FM_RANSAC = 1;
+    USE_CLAHE = 0;
+    if (!fsSettings["grid_rows"].empty())
+        GRID_ROWS = (int)fsSettings["grid_rows"];
+    if (!fsSettings["grid_cols"].empty())
+        GRID_COLS = (int)fsSettings["grid_cols"];
+    if (!fsSettings["use_fundamental_ransac"].empty())
+        USE_FM_RANSAC = (int)fsSettings["use_fundamental_ransac"];
+    if (!fsSettings["use_clahe"].empty())
+        USE_CLAHE = (int)fsSettings["use_clahe"];
+    printf("GRID: %dx%d, USE_FM_RANSAC: %d, USE_CLAHE: %d\n",
+           GRID_ROWS, GRID_COLS, USE_FM_RANSAC, USE_CLAHE);
 
     MULTIPLE_THREAD = fsSettings["multiple_thread"];
 
